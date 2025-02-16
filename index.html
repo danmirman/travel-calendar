@@ -95,20 +95,20 @@
         .empty-day {
             background: transparent;
         }
-        .trip-bar {
-            height: 6px;
-            background-color: #FF5733; /* Color of the travel bar */
-            position: absolute;
-            top: 0;
-            left: 0;
-            border-radius: 4px;
+        .arrow-icon div {
+            font-size: 24px;
+            color: blue;
+            margin-top: -12px;
+            margin-left: -12px;
         }
-        .trip-bar span {
-            position: absolute;
-            right: 0;
-            top: -20px;
-            font-size: 10px;
-            color: white;
+        .custom-marker {
+            background: none; /* Remove any background */
+            border: none; /* Remove any border */
+            box-shadow: none; /* Remove any shadow */
+        }
+        .leaflet-marker-icon {
+            background: none; /* Ensure no background */
+            border: none; /* Ensure no border */
         }
         #map {
             height: 500px;
@@ -496,20 +496,20 @@
 
                 let currentDate = new Date(year, month, day);
 
-                // Check if the day is part of any trip and add bars
+                // Check if the day is part of any trip
                 tripData.forEach(trip => {
                     let tripStart = new Date(trip.startDate);
                     let tripEnd = new Date(tripStart);
                     tripEnd.setDate(tripStart.getDate() + trip.duration);
 
                     if (currentDate >= tripStart && currentDate <= tripEnd) {
-                        const bar = document.createElement("div");
-                        bar.classList.add("trip-bar");
-                        const barWidth = (currentDate.getDate() - tripStart.getDate()) * 40;  // Adjust bar width
-                        bar.style.width = `${barWidth}px`;
-                        bar.style.backgroundColor = countryColors[trip.country];
-                        bar.innerHTML = `<span>${trip.country}</span>`; 
-                        dayDiv.appendChild(bar);
+                        // Apply the background color based on the trip's country
+                        dayDiv.style.backgroundColor = countryColors[trip.country];
+
+                        // Add country label to the day
+                        const countryLabel = document.createElement("span");
+                        countryLabel.textContent = countryCodes[trip.country]; // Use 3-digit code
+                        dayDiv.appendChild(countryLabel);
                     }
                 });
 
@@ -608,30 +608,68 @@
             // If the map doesn't exist, create it
             if (!map) {
                 console.log("Initializing the map...");
-                map = L.map('map').setView([20, 0], 2); // Create the map instance if it doesn't exist yet
-
+                map = L.map('map').setView([20, 0], 2);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    attribution: '&copy; OpenStreetMap contributors'
                 }).addTo(map);
             }
 
-            // Clear existing markers and lines from the map before drawing new ones
-            map.eachLayer(function(layer) {
-                if (layer instanceof L.Marker || layer instanceof L.Polyline) {
+            // Clear existing elements
+            map.eachLayer(layer => {
+                if (layer instanceof L.Marker || layer instanceof L.Polyline || layer instanceof L.PolylineDecorator) {
                     map.removeLayer(layer);
                 }
             });
 
-            // Plot countries on the map (simplified for demonstration)
-            tripData.forEach((trip, index) => {
-                let countryCode = countryCodes[trip.country];
-                if (countryCode) {
-                    // Example: Add marker at a country (this would need more detailed logic to calculate exact country center)
-                    let marker = L.marker([0, 0]).addTo(map); // Use country-specific lat, lon for accurate placement
-                    marker.bindPopup(trip.country);
-                }
+            // Plot countries and create segments
+            const coordinates = tripData
+                .map(trip => getCapitalCoordinates(trip.country))
+                .filter(Boolean)
+                .map(({ lat, lon }) => [lat, lon]);
+
+            // Draw individual segments with arrows
+            for (let i = 0; i < coordinates.length - 1; i++) {
+                const start = coordinates[i];
+                const end = coordinates[i + 1];
+                
+                // Create individual segment
+                const segment = L.polyline([start, end], {
+                    color: 'blue',
+                    weight: 3
+                }).addTo(map);
+
+                // Add arrow decoration to the segment
+                L.polylineDecorator(segment, {
+                    patterns: [{
+                        offset: '80%', // Position arrow near the end of the segment
+                        repeat: false,
+                        symbol: L.Symbol.arrowHead({
+                            pixelSize: 15,
+                            polygon: false,
+                            pathOptions: {
+                                stroke: true,
+                                color: 'blue',
+                                weight: 3
+                            }
+                        })
+                    }]
+                }).addTo(map);
+            }
+
+            // Add custom markers for all points (without leader lines)
+            coordinates.forEach(([lat, lon]) => {
+                L.marker([lat, lon], {
+                    icon: L.icon({
+                        iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41],
+                        shadowUrl: '', // Remove shadow
+                        className: 'custom-marker' // Add a custom class
+                    })
+                }).addTo(map);
             });
         }
+
         function getCapitalCoordinates(country) {
             // Data for capital coordinates (replace with actual API call or data)
             const capitals = {
@@ -830,7 +868,6 @@
                 "Zambia": { name: "Lusaka", lat: -15.3875, lon: 28.3228 },
                 "Zimbabwe": { name: "Harare", lat: -17.8252, lon: 31.0335 }
             };
-
             return capitals[country] || null;
         }
     </script>
